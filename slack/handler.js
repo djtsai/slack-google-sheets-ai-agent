@@ -5,6 +5,15 @@ const { runAgent } = require("../agent/agent");
 // Create receiver
 const receiver = new ExpressReceiver({
   signingSecret: process.env.SLACK_SIGNING_SECRET,
+  processBeforeResponse: false,
+  middlewares: [
+    (req, res, next) => {
+      if (req.headers["x-slack-retry-num"]) {
+        return res.status(200).send();
+      }
+      next();
+    },
+  ],
 });
 
 // Bolt app
@@ -24,6 +33,10 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // Add auth google routes
+expressApp.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 expressApp.get("/auth/google", (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -39,19 +52,28 @@ expressApp.get("/auth/google", (req, res) => {
 expressApp.get("/auth/google/callback", async (req, res) => {
   const { tokens } = await oauth2Client.getToken(req.query.code);
 
-  console.log(tokens);
-
   res.send("Done");
 });
 
+const processedEvents = new Set();
+
 app.event("app_mention", async ({ event, say }) => {
+  if (processedEvents.has(event.event_ts)) return;
+  processedEvents.add(event.event_ts);
+  setTimeout(() => processedEvents.delete(event.event_ts), 5 * 60 * 1000);
+
   const text = event.text;
+  const thread_ts = event.thread_ts || event.ts;
 
-  await say("Thinking...");
+  await say({ text: "Thinking...", thread_ts });
 
-  const response = await runAgent(text);
-
-  await say(response);
+  try {
+    const response = await runAgent(text);
+    await say({ text: response, thread_ts });
+  } catch (err) {
+    console.error("Agent error:", err);
+    await say({ text: "Sorry, something went wrong. Please try your question again.", thread_ts });
+  }
 });
 
 module.exports = app;
