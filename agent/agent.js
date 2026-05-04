@@ -62,6 +62,23 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "submit_answer",
+      description: "Submit your final answer to the user. Call this when you have found the answer in the fetched data, or when you have exhausted all relevant tabs and still cannot find the answer. Do not call this until you are ready to give a definitive response.",
+      parameters: {
+        type: "object",
+        properties: {
+          answer: {
+            type: "string",
+            description: "Your final answer to the user's query. If you could not find the answer after checking all relevant tabs, pass \"I do not know\".",
+          },
+        },
+        required: ["answer"],
+      },
+    },
+  },
 ];
 
 async function runAgent(query) {
@@ -101,12 +118,12 @@ Step 3 — Fetch data from the highest-ranked tab:
 - For all other tabs: call get_sheet_data, passing the sheet_name exactly as it appears in the list from Step 1.
 
 Step 4 — Evaluate whether the fetched data is sufficient to answer the query.
-- If yes: draft a response and proceed to Step 5.
-- If no: do not respond yet. Go back to Step 3 and fetch data from the next highest-ranked tab. Never fetch the same tab twice.
+- If yes: call submit_answer with your final answer.
+- If no: fetch the next tab in your ranked list. Never fetch the same tab twice.
 
-Step 5 — Before sending your response to the user, evaluate it: if the response expresses that you do not know, cannot find the information, or have insufficient data, do not send it. Instead, go back to Step 3 and fetch data from the next highest-ranked tab that has not yet been fetched. Repeat until you either have a confident answer or have exhausted all relevant tabs.
+Step 5 — Before calling submit_answer, evaluate your answer: if it expresses that you do not know, cannot find the information, or have insufficient data, do not call submit_answer yet. Instead, go back to Step 3 and fetch data from the next highest-ranked tab that has not yet been fetched. Repeat until you either have a confident answer or have exhausted all relevant tabs.
 
-Step 6 — If you have fetched all relevant tabs and still cannot find the answer, respond with "I don't know" rather than guessing. Do not invent or infer information that is not present in the spreadsheet data.
+Step 6 — If you have fetched all relevant tabs and still cannot find the answer, call submit_answer with "I do not know". Do not invent or infer information that is not present in the spreadsheet data.
 `,
     },
     { role: "user", content: query },
@@ -128,7 +145,11 @@ Step 6 — If you have fetched all relevant tabs and still cannot find the answe
     messages.push(message);
 
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      return message.content;
+      messages.push({
+        role: "user",
+        content: "Do not respond to the user yet. Go back to Step 3 and immediately call the appropriate tool to fetch data from the next highest-ranked tab you have not yet fetched. When you are ready to give your final answer, call submit_answer.",
+      });
+      continue;
     }
 
     hasStarted = true;
@@ -136,7 +157,10 @@ Step 6 — If you have fetched all relevant tabs and still cannot find the answe
     for (const call of message.tool_calls) {
       let result;
 
-      if (call.function.name === "get_sheet_names") {
+      if (call.function.name === "submit_answer") {
+        const { answer } = JSON.parse(call.function.arguments);
+        return answer;
+      } else if (call.function.name === "get_sheet_names") {
         result = await getSheetNames();
       } else if (call.function.name === "get_sheet_data") {
         const { sheet_name } = JSON.parse(call.function.arguments);
