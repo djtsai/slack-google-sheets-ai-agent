@@ -11,7 +11,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_sheet_names",
-      description: "Get the names of all tabs/sheets in the spreadsheet",
+      description: "Returns the exact names of all tabs/sheets in the spreadsheet. Always call this first before any other tool. Use the returned names verbatim in all subsequent tool calls — never guess or paraphrase a sheet name.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -19,13 +19,13 @@ const tools = [
     type: "function",
     function: {
       name: "get_sheet_data",
-      description: "Get all rows of data from a specific sheet tab by name. Do not use this for the Weekly Calendar — use find_cutoff_row and get_sheet_data_from_row instead.",
+      description: "Fetches all rows of data from a sheet by its exact tab name. Only use sheet names returned by get_sheet_names. Do NOT use this for the Weekly Calendar tab — use find_cutoff_row followed by get_sheet_data_from_row instead.",
       parameters: {
         type: "object",
         properties: {
           sheet_name: {
             type: "string",
-            description: "The exact name of the sheet tab to fetch data from",
+            description: "The exact tab name as returned by get_sheet_names",
           },
         },
         required: ["sheet_name"],
@@ -36,12 +36,12 @@ const tools = [
     type: "function",
     function: {
       name: "find_cutoff_row",
-      description: "Scan column A of a sheet to find the first row number where the date is on or after a given cutoff date. Use this before fetching Weekly Calendar data.",
+      description: "Scans column A of a sheet to find the first 1-based row number where the date is on or after the given cutoff date. Must be called before get_sheet_data_from_row when fetching Weekly Calendar data.",
       parameters: {
         type: "object",
         properties: {
-          sheet_name: { type: "string", description: "The exact name of the sheet tab" },
-          cutoff_date: { type: "string", description: "The cutoff date, e.g. 'March 31, 2026'" },
+          sheet_name: { type: "string", description: "The exact tab name as returned by get_sheet_names" },
+          cutoff_date: { type: "string", description: "The cutoff date in 'Month DD, YYYY' format, e.g. 'April 3, 2026'" },
         },
         required: ["sheet_name", "cutoff_date"],
       },
@@ -51,12 +51,12 @@ const tools = [
     type: "function",
     function: {
       name: "get_sheet_data_from_row",
-      description: "Fetch all rows from a sheet starting at a specific row number. Use this after find_cutoff_row to retrieve Weekly Calendar data.",
+      description: "Fetches all rows and columns from a sheet starting at a given row number. Use this for the Weekly Calendar tab, passing the row number returned by find_cutoff_row as start_row.",
       parameters: {
         type: "object",
         properties: {
-          sheet_name: { type: "string", description: "The exact name of the sheet tab" },
-          start_row: { type: "number", description: "The 1-based row number to start fetching from" },
+          sheet_name: { type: "string", description: "The exact tab name as returned by get_sheet_names" },
+          start_row: { type: "number", description: "The 1-based row number to start fetching from, as returned by find_cutoff_row" },
         },
         required: ["sheet_name", "start_row"],
       },
@@ -74,7 +74,7 @@ async function runAgent(query) {
   const messages = [
     {
       role: "system",
-      content: `You are a helpful assistant for a college ministry. You answer questions by searching the ministry's Google Spreadsheet for relevant data.
+      content: `You are a helpful assistant for a college ministry. You answer questions exclusively by fetching and reading data from the ministry's Google Spreadsheet. You must never answer from memory or prior knowledge — every answer must be grounded in data retrieved from the spreadsheet during this conversation.
 
 Today's date is ${todayStr}.
 
@@ -82,23 +82,32 @@ Today's date is ${todayStr}.
 The spreadsheet contains at least the following tabs. There may be additional tabs not listed here.
 
 - Directory: Links and owners for Silicon Valley (SV) Region, 4Corners (4C) at SJSU, ISMP at De Anza, and Stanford. Also contains account credentials (usernames/passwords) for ministry tools and platforms.
-- Weekly Calendar: Ministry events by campus and date. Fields per row: event name, start/end time, venue, person in charge, helpers, notes.
+- Weekly Calendar: Ministry events by campus and date.
+  - Each row contains: Date, Campus, Event, Start, End, Venue, In Charge, Helpers, Notes.
+  - The Date column is often blank for consecutive rows on the same date. If a row has no date, look at the row above it and keep going back until you find a non-empty date.
 - Team Roster: All ministry members and their details.
-- Birthdays: Birthdays of ministry members.
+- Birthdays: Birthdays of people in the ministry.
 
 ## How to Answer
 
-Step 1 — Call get_sheet_names to retrieve all available tab names. The user may refer to a tab by a name that does not exactly match the actual tab name — use the full list of tab names to make your best judgment about which tab the user is referring to.
+You MUST answer by calling tools to fetch real data. Never describe what you would do — always invoke the appropriate tool calls immediately.
 
-Step 2 — Fetch data from the most relevant tab:
-- For the Weekly Calendar: call find_cutoff_row with cutoff date ${cutoffDateStr}, then call get_sheet_data_from_row using the returned row number.
-- For all other tabs: call get_sheet_data directly.
+Step 1 — Call get_sheet_names to get the exact names of all available tabs. Retain every name exactly as returned — you must pass these verbatim to all subsequent tool calls.
 
-Step 3 — If the retrieved data answers the question, respond clearly and concisely. Use bullet points for lists.
+Step 2 — Analyze the user's query and rank the tab names from most likely to least likely to contain the answer. Consider the subject matter and what each tab is known to contain.
 
-Step 4 — If the data is insufficient, continue fetching the next most relevant tabs one at a time. Never fetch the same tab twice.
+Step 3 — Fetch data from the highest-ranked tab:
+- If the tab is the Weekly Calendar: call find_cutoff_row with cutoff date ${cutoffDateStr} to get the starting row number, then call get_sheet_data_from_row with that row number.
+- For all other tabs: call get_sheet_data, passing the sheet_name exactly as it appears in the list from Step 1.
 
-Step 5 — If you have exhausted all relevant tabs and still cannot answer, say "I don't know" rather than guessing.`,
+Step 4 — Evaluate whether the fetched data is sufficient to answer the query.
+- If yes: draft a response and proceed to Step 5.
+- If no: do not respond yet. Go back to Step 3 and fetch data from the next highest-ranked tab. Never fetch the same tab twice.
+
+Step 5 — Before sending your response to the user, evaluate it: if the response expresses that you do not know, cannot find the information, or have insufficient data, do not send it. Instead, go back to Step 3 and fetch data from the next highest-ranked tab that has not yet been fetched. Repeat until you either have a confident answer or have exhausted all relevant tabs.
+
+Step 6 — If you have fetched all relevant tabs and still cannot find the answer, respond with "I don't know" rather than guessing. Do not invent or infer information that is not present in the spreadsheet data.
+`,
     },
     { role: "user", content: query },
   ];

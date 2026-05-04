@@ -44,7 +44,7 @@ async function findRowByDate(sheetName, cutoffDate) {
 }
 
 async function getSheetDataFromRow(sheetName, startRow) {
-  return getSheet(`${sheetName}!A${startRow}:Z`);
+  return getSheet(`${sheetName}!${startRow}:${startRow + 999999}`);
 }
 
 async function getSheetNames() {
