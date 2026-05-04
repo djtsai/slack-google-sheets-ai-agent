@@ -111,7 +111,7 @@ You MUST answer by calling tools to fetch real data. Never describe what you wou
 
 Step 1 — Call get_sheet_names to get the exact names of all available tabs. Retain every name exactly as returned — you must pass these verbatim to all subsequent tool calls.
 
-Step 2 — Analyze the user's query and rank the tab names from most likely to least likely to contain the answer. Consider the subject matter and what each tab is known to contain.
+Step 2 — Analyze the user's query and rank the tab names from most likely to least likely to contain the answer. Consider the subject matter and what each tab is known to contain. Write out your ranked list before proceeding.
 
 Step 3 — Fetch data from the highest-ranked tab:
 - If the tab is the Weekly Calendar: call find_cutoff_row with cutoff date ${cutoffDateStr} to get the starting row number, then call get_sheet_data_from_row with that row number.
@@ -164,6 +164,7 @@ Step 6 — If you have fetched all relevant tabs and still cannot find the answe
         result = await getSheetNames();
       } else if (call.function.name === "get_sheet_data") {
         const { sheet_name } = JSON.parse(call.function.arguments);
+        console.log('get sheet data from sheet_name', sheet_name);
         result = await getSheetByName(sheet_name);
       } else if (call.function.name === "find_cutoff_row") {
         const { sheet_name, cutoff_date } = JSON.parse(call.function.arguments);
