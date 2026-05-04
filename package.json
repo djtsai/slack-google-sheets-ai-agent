@@ -4,6 +4,8 @@
   "description": "AI Agent that reads Google Sheets",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
+    "ask": "node run.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
