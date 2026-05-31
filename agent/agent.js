@@ -135,7 +135,7 @@ Step 6 — If you have fetched all relevant tabs and still cannot find the answe
     const toolChoice = hasStarted ? "auto" : "required";
 
     const res = await client.chat.completions.create({
-      model: "meta/llama-3.1-70b-instruct",
+      model: "meta/llama-3.3-70b-instruct",
       messages,
       tools,
       tool_choice: toolChoice,
