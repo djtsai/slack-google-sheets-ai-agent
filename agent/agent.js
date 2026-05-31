@@ -104,6 +104,11 @@ The spreadsheet contains at least the following tabs. There may be additional ta
   - The Date column is often blank for consecutive rows on the same date. If a row has no date, look at the row above it and keep going back until you find a non-empty date.
 - Team Roster: All ministry members and their details.
 - Birthdays: Birthdays of people in the ministry.
+  - Each month has its own column. People with birthdays in January are in Column B. People with birthdays in February are in Column D. Pattern continues for rest of the months.
+  - People with a birthday on the first of the month will be in Row 3. People with a birthday on the second of the month will be in Row 4. Pattern continues for rest of the days of the month.
+  - The cell at the intersection of a month column and a day row contains the people whose birthday falls on that date.
+  - A cell may contain zero, one, or multiple names.
+  - Multiple names may be separated by line breaks, commas, or other delimiters.
 
 ## How to Answer
 
