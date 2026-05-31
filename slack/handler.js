@@ -1,6 +1,7 @@
 const { App, ExpressReceiver } = require("@slack/bolt");
 const { google } = require("googleapis");
 const { runAgent } = require("../agent/agent");
+const { claudeVerbs } = require("../constants/claude-verbs");
 
 // Create receiver
 const receiver = new ExpressReceiver({
@@ -65,7 +66,8 @@ app.event("app_mention", async ({ event, say }) => {
   const text = event.text;
   const thread_ts = event.thread_ts || event.ts;
 
-  await say({ text: "Thinking...", thread_ts });
+  const randomVerb = claudeVerbs[Math.floor(Math.random() * claudeVerbs.length)];
+  await say({ text: `${randomVerb}...`, thread_ts });
 
   try {
     const response = await runAgent(text);
